@@ -1,0 +1,6 @@
+{
+  "name": "EduCore - School Management System Auth & Multi-Role Architecture",
+  "description": "Enterprise-grade baseline authentication and multi-role routing architecture for School Management Systems built with Next.js, Supabase SSR, TypeScript, and Tailwind CSS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
