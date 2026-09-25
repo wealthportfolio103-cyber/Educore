@@ -6,6 +6,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Database, UserRole } from '@/types/database.types';
+import { getSupabaseConfig } from './client';
 
 // Map of route prefixes to the required user role
 export const ROLE_ROUTE_ACCESS: { prefix: string; role: UserRole }[] = [
@@ -35,12 +36,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock-school-demo.supabase.co';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key-school-mgmt-system-2025';
+  const { url, anonKey } = getSupabaseConfig();
 
   const supabase = createServerClient<Database>(
-    supabaseUrl,
-    supabaseAnonKey,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

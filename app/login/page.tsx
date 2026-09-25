@@ -1,11 +1,12 @@
 /**
- * School Management System - Authentication Login Page
- * Next.js App Router Client Component with Supabase Auth
+ * School Management System - Authentication Portal
+ * Production Tabbed Auth (Sign In & Sign Up) with direct Supabase Auth integration.
  */
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   School,
   Lock,
@@ -16,130 +17,164 @@ import {
   Loader2,
   CheckCircle2,
   ShieldCheck,
+  User,
   GraduationCap,
-  Sparkles,
+  AlertTriangle,
+  Settings,
+  ChevronDown,
+  Save,
+  Check,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import {
+  createClient,
+  isSupabaseConfigured,
+  getSupabaseConfig,
+  saveSupabaseConfig,
+} from '@/lib/supabase/client';
 import { ROLE_DEFAULT_PATHS } from '@/lib/supabase/middleware';
 import type { UserRole } from '@/types/database.types';
-
-// Pre-seeded demo credentials for quick role switching and testing
-export const DEMO_CREDENTIALS: {
-  role: UserRole;
-  title: string;
-  email: string;
-  password: string;
-  badgeColor: string;
-  description: string;
-}[] = [
-  {
-    role: 'admin',
-    title: 'School Administrator',
-    email: 'admin@educore.edu',
-    password: 'Password123!',
-    badgeColor: 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200',
-    description: 'System operations, staff, student enrollment, academic terms',
-  },
-  {
-    role: 'teacher',
-    title: 'Faculty / Teacher',
-    email: 'teacher@educore.edu',
-    password: 'Password123!',
-    badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200',
-    description: 'Class rosters, attendance, grading, homework assignments',
-  },
-  {
-    role: 'accountant',
-    title: 'School Accountant',
-    email: 'finance@educore.edu',
-    password: 'Password123!',
-    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200',
-    description: 'Tuition fees, billing, invoices, receipts, financial records',
-  },
-  {
-    role: 'parent',
-    title: 'Parent / Guardian',
-    email: 'parent@educore.edu',
-    password: 'Password123!',
-    badgeColor: 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200',
-    description: 'Child progress, report cards, fee payments, announcements',
-  },
-  {
-    role: 'student',
-    title: 'Enrolled Student',
-    email: 'student@educore.edu',
-    password: 'Password123!',
-    badgeColor: 'bg-cyan-100 text-cyan-800 border-cyan-200 hover:bg-cyan-200',
-    description: 'Timetables, assignments submission, term marks, courses',
-  },
-];
 
 interface LoginPageProps {
   onSuccess?: (role: UserRole, email: string) => void;
   initialRole?: UserRole;
 }
 
+const ROLES: { id: UserRole; title: string; desc: string }[] = [
+  { id: 'admin', title: 'Administrator', desc: 'School operations & governance' },
+  { id: 'teacher', title: 'Teacher / Faculty', desc: 'Classes, attendance & grading' },
+  { id: 'accountant', title: 'Accountant', desc: 'Tuition, fees & billing' },
+  { id: 'parent', title: 'Parent / Guardian', desc: 'Student progress & fee bills' },
+  { id: 'student', title: 'Student', desc: 'Homework, courses & timetable' },
+];
+
 export default function LoginPage({ onSuccess }: LoginPageProps) {
-  const [email, setEmail] = useState('admin@educore.edu');
-  const [password, setPassword] = useState('Password123!');
-  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
+
+  // Tab State: 'signin' | 'signup'
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+
+  // Sign In Form State
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+
+  // Sign Up Form State
+  const [signUpFirstName, setSignUpFirstName] = useState('');
+  const [signUpLastName, setSignUpLastName] = useState('');
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [signUpRole, setSignUpRole] = useState<UserRole>('teacher');
+
+  // Submission & Alert States
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Quick fill helper for developers & test users
-  const handleSelectDemo = (demo: typeof DEMO_CREDENTIALS[number]) => {
-    setEmail(demo.email);
-    setPassword(demo.password);
+  // Supabase Configuration Status Check
+  const [hasConfig, setHasConfig] = useState(true);
+  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const [inputUrl, setInputUrl] = useState('');
+  const [inputAnonKey, setInputAnonKey] = useState('');
+  const [configSaved, setConfigSaved] = useState(false);
+
+  useEffect(() => {
+    const configured = isSupabaseConfigured();
+    setHasConfig(configured);
+    const { url, anonKey } = getSupabaseConfig();
+    if (!configured) {
+      setInputUrl(url.includes('placeholder') ? '' : url);
+      setInputAnonKey(anonKey.includes('placeholder') ? '' : anonKey);
+    }
+  }, []);
+
+  const handleSaveConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputUrl.trim() || !inputAnonKey.trim()) {
+      setErrorMsg('Please enter both Supabase Project URL and Anon Public Key.');
+      return;
+    }
+    saveSupabaseConfig(inputUrl.trim(), inputAnonKey.trim());
+    setHasConfig(true);
+    setConfigSaved(true);
+    setShowConfigDrawer(false);
     setErrorMsg(null);
+    setSuccessMsg('Supabase configuration saved! You can now authenticate.');
+    setTimeout(() => setConfigSaved(false), 3000);
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // Humanize and sanitize auth errors
+  const formatAuthError = (err: unknown): string => {
+    if (!err) return 'An unexpected error occurred.';
+    const message = err instanceof Error ? err.message : String(err);
+    const lower = message.toLowerCase();
+
+    if (
+      lower.includes('failed to fetch') ||
+      lower.includes('load failed') ||
+      lower.includes('networkerror')
+    ) {
+      return 'Network error: Unable to connect to Supabase authentication server. Please check your internet connection or verify your Supabase project URL.';
+    }
+    if (lower.includes('invalid login credentials')) {
+      return 'Invalid email or password. Please verify your credentials and try again.';
+    }
+    if (lower.includes('user not found')) {
+      return 'No account was found with this email address. Please sign up or check for typos.';
+    }
+    if (lower.includes('user already registered') || lower.includes('already exists')) {
+      return 'An account with this email already exists. Please switch to the Sign In tab.';
+    }
+    if (lower.includes('email not confirmed')) {
+      return 'Your email address has not been confirmed yet. Please check your inbox for the confirmation link.';
+    }
+    if (lower.includes('password should be at least')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    if (lower.includes('signup requires a valid password')) {
+      return 'Please choose a stronger password.';
+    }
+    return message;
+  };
+
+  // Sign In Handler
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    if (!signInEmail.trim() || !signInPassword) {
+      setErrorMsg('Please enter both email and password.');
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      setErrorMsg(
+        'Supabase configuration required. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to sign in.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
       const supabase = createClient();
 
-      // 1. Authenticate with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password,
+      // Authenticate with Supabase Auth
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: signInEmail.trim(),
+        password: signInPassword,
       });
 
-      if (error) {
-        // Fallback for simulated/demo accounts in environments without live Supabase connection
-        const matchedDemo = DEMO_CREDENTIALS.find(
-          (d) => d.email.toLowerCase() === email.trim().toLowerCase()
-        );
-
-        if (matchedDemo && password === 'Password123!') {
-          setSuccessMsg(`Welcome back! Routing to ${matchedDemo.title} portal...`);
-          if (onSuccess) {
-            onSuccess(matchedDemo.role, matchedDemo.email);
-          } else {
-            const destination = ROLE_DEFAULT_PATHS[matchedDemo.role];
-            setTimeout(() => {
-              window.location.href = destination;
-            }, 600);
-          }
-          return;
-        }
-
-        throw new Error(
-          error.message === 'Invalid login credentials'
-            ? 'Invalid email or password. Please verify credentials or use a test role preset below.'
-            : error.message
-        );
+      if (signInError) {
+        throw signInError;
       }
 
       if (!data.user) {
-        throw new Error('Authentication succeeded but user identity was not retrieved.');
+        throw new Error('Sign-in succeeded but user record was not retrieved.');
       }
 
-      // 2. Fetch User Profile to determine assigned role
+      // Query profiles table to determine user's institutional role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -158,204 +193,515 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
         detectedRole = data.user.user_metadata.role as UserRole;
       }
 
-      setSuccessMsg(`Authenticated successfully. Redirecting to ${detectedRole.toUpperCase()} workspace...`);
+      setSuccessMsg(`Welcome back! Routing to ${detectedRole.toUpperCase()} workspace...`);
 
       if (onSuccess) {
-        onSuccess(detectedRole, email);
+        onSuccess(detectedRole, signInEmail.trim());
       } else {
         const destination = ROLE_DEFAULT_PATHS[detectedRole] || '/admin';
-        window.location.href = destination;
+        router.push(destination);
+        router.refresh();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred during login.';
-      setErrorMsg(message);
+      setErrorMsg(formatAuthError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sign Up Handler
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!signUpFirstName.trim() || !signUpLastName.trim()) {
+      setErrorMsg('Please provide both first name and last name.');
+      return;
+    }
+
+    if (!signUpEmail.trim() || !signUpPassword) {
+      setErrorMsg('Please provide both institutional email and password.');
+      return;
+    }
+
+    if (signUpPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      setErrorMsg(
+        'Supabase configuration required. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to register.'
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const supabase = createClient();
+      const fullName = `${signUpFirstName.trim()} ${signUpLastName.trim()}`;
+
+      // 1. Create User in Supabase Auth with user metadata
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: signUpEmail.trim(),
+        password: signUpPassword,
+        options: {
+          data: {
+            full_name: fullName,
+            first_name: signUpFirstName.trim(),
+            last_name: signUpLastName.trim(),
+            role: signUpRole,
+          },
+        },
+      });
+
+      if (signUpError) {
+        throw signUpError;
+      }
+
+      if (!data.user) {
+        throw new Error('Registration completed but user object was not returned.');
+      }
+
+      // 2. Insert corresponding row into profiles table
+      try {
+        const { error: profileError } = await (supabase.from('profiles') as any).upsert({
+          id: data.user.id,
+          email: signUpEmail.trim(),
+          full_name: fullName,
+          role: signUpRole,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        if (profileError) {
+          console.warn('Profile record insert notice:', profileError.message);
+        }
+      } catch (profileErr) {
+        console.warn('Profile table insert warning:', profileErr);
+      }
+
+      // 3. Handle immediate session or email confirmation required
+      if (data.session) {
+        setSuccessMsg(
+          `Account created successfully! Redirecting to ${signUpRole.toUpperCase()} dashboard...`
+        );
+        if (onSuccess) {
+          onSuccess(signUpRole, signUpEmail.trim());
+        } else {
+          const destination = ROLE_DEFAULT_PATHS[signUpRole] || '/admin';
+          router.push(destination);
+          router.refresh();
+        }
+      } else {
+        setSuccessMsg(
+          `Registration successful for ${signUpEmail.trim()}! Please check your inbox to confirm your email, then sign in.`
+        );
+        // Switch to sign in tab and populate email
+        setSignInEmail(signUpEmail.trim());
+        setActiveTab('signin');
+      }
+    } catch (err: unknown) {
+      setErrorMsg(formatAuthError(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        {/* School Logo & Title */}
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Brand Header */}
         <div className="flex justify-center">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-xl shadow-blue-500/20 text-white border border-white/10">
-            <School className="w-8 h-8" />
+          <div className="h-12 w-12 rounded-xl bg-indigo-600 flex items-center justify-center shadow-xs text-white">
+            <School className="w-6 h-6" />
           </div>
         </div>
-        <h2 className="mt-5 text-center text-3xl font-extrabold tracking-tight text-white">
+        <h2 className="mt-4 text-center text-2xl font-bold tracking-tight text-slate-900">
           EduCore Academy
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
-          Unified Multi-Role School Management Portal
+        <p className="mt-1 text-center text-xs text-slate-500">
+          Enterprise School Management & Multi-Role Student Information System
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10 px-4 sm:px-0">
-        <div className="bg-slate-900 border border-slate-800 py-8 px-6 shadow-2xl rounded-2xl sm:px-10">
-          {/* Status Message Banners */}
-          {errorMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
-              <div className="flex-1 leading-relaxed">{errorMsg}</div>
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
-              <div className="flex-1 leading-relaxed">{successMsg}</div>
-            </div>
-          )}
-
-          {/* Login Form */}
-          <form className="space-y-5" onSubmit={handleLogin}>
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
-              >
-                Institutional Email
-              </label>
-              <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="h-4 w-4" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. staff@educore.edu"
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="password"
-                  className="block text-xs font-semibold uppercase tracking-wider text-slate-300"
-                >
-                  Password
-                </label>
-                <button
-                  type="button"
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="block w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500"
-                />
-                <span>Remember this terminal</span>
-              </label>
-              <span className="flex items-center gap-1 text-slate-500 text-[11px]">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                256-bit SSL Session
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-600/30 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying credentials & role...</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign In to School Portal</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Quick Demo Role Selector */}
-          <div className="mt-8 pt-6 border-t border-slate-800">
-            <div className="flex items-center gap-1.5 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Instant Role Switcher (Pre-Configured)
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mb-3">
-              Click any role below to prefill credentials and test role-based route enforcement:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {DEMO_CREDENTIALS.map((demo) => {
-                const isSelected = email === demo.email;
-                return (
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
+        <div className="bg-white border border-slate-200/90 py-7 px-6 shadow-sm rounded-2xl sm:px-8">
+          {/* Missing Supabase Configuration Banner */}
+          {!hasConfig && (
+            <div className="mb-5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-900">Supabase configuration required</p>
+                  <p className="mt-0.5 text-amber-700 leading-relaxed">
+                    Please set <code className="font-mono bg-amber-100/80 px-1 py-0.5 rounded text-[11px]">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+                    <code className="font-mono bg-amber-100/80 px-1 py-0.5 rounded text-[11px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>.
+                  </p>
                   <button
-                    key={demo.role}
                     type="button"
-                    onClick={() => handleSelectDemo(demo)}
-                    className={`text-left p-2.5 rounded-xl border text-xs transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-slate-800 border-blue-500/80 ring-1 ring-blue-500/50 shadow-md'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
-                    }`}
+                    onClick={() => setShowConfigDrawer(!showConfigDrawer)}
+                    className="mt-2 text-[11px] font-semibold text-amber-900 underline hover:text-amber-950 flex items-center gap-1 cursor-pointer"
                   >
-                    <div className="flex items-center justify-between w-full mb-1">
-                      <span className="font-semibold text-white truncate">{demo.title}</span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold border capitalize ${demo.badgeColor}`}
-                      >
-                        {demo.role}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 truncate">{demo.email}</span>
+                    <Settings className="w-3 h-3" />
+                    <span>{showConfigDrawer ? 'Hide Credentials Setup' : 'Enter Credentials in Browser'}</span>
                   </button>
-                );
-              })}
+                </div>
+              </div>
+
+              {/* In-Browser Credential Entry Drawer */}
+              {showConfigDrawer && (
+                <form onSubmit={handleSaveConfig} className="mt-3 pt-3 border-t border-amber-200/80 space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-amber-900 mb-0.5">
+                      Project URL
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      placeholder="https://xyzcompany.supabase.co"
+                      value={inputUrl}
+                      onChange={(e) => setInputUrl(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-amber-900 mb-0.5">
+                      Anon Public API Key
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      value={inputAnonKey}
+                      onChange={(e) => setInputAnonKey(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 px-3 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save & Connect</span>
+                  </button>
+                </form>
+              )}
             </div>
+          )}
+
+          {/* Actionable Error Banner */}
+          {errorMsg && (
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+              <div className="flex-1 leading-relaxed font-medium">{errorMsg}</div>
+            </div>
+          )}
+
+          {/* Success Banner */}
+          {successMsg && (
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+              <div className="flex-1 leading-relaxed font-medium">{successMsg}</div>
+            </div>
+          )}
+
+          {/* Tabbed Navigation Header (Sign In / Sign Up) */}
+          <div className="flex rounded-xl bg-slate-100 p-1 mb-6 border border-slate-200/70">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('signin');
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                activeTab === 'signin'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('signup');
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                activeTab === 'signup'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
+
+          {/* TAB 1: SIGN IN FORM */}
+          {activeTab === 'signin' && (
+            <form className="space-y-4" onSubmit={handleSignIn}>
+              <div>
+                <label
+                  htmlFor="signin-email"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Institutional Email
+                </label>
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <input
+                    id="signin-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={signInEmail}
+                    onChange={(e) => setSignInEmail(e.target.value)}
+                    placeholder="e.g. j.smith@educore.edu"
+                    className="block w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label
+                    htmlFor="signin-password"
+                    className="block text-xs font-semibold text-slate-700"
+                  >
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setErrorMsg(
+                        'Password reset instructions will be sent to your institutional email if configured in Supabase.'
+                      )
+                    }
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <input
+                    id="signin-password"
+                    name="password"
+                    type={showSignInPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={signInPassword}
+                    onChange={(e) => setSignInPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="block w-full pl-9 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignInPassword(!showSignInPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    {showSignInPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Remember this terminal</span>
+                </label>
+                <span className="flex items-center gap-1 text-slate-500 text-[11px]">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  256-bit Encrypted
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-xs text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer mt-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <span>Sign In to School Portal</span>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* TAB 2: SIGN UP FORM */}
+          {activeTab === 'signup' && (
+            <form className="space-y-3.5" onSubmit={handleSignUp}>
+              {/* Name Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="signup-firstname"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                  >
+                    First Name
+                  </label>
+                  <div className="relative rounded-lg shadow-xs">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <input
+                      id="signup-firstname"
+                      type="text"
+                      required
+                      value={signUpFirstName}
+                      onChange={(e) => setSignUpFirstName(e.target.value)}
+                      placeholder="e.g. Jane"
+                      className="block w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="signup-lastname"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                  >
+                    Last Name
+                  </label>
+                  <input
+                    id="signup-lastname"
+                    type="text"
+                    required
+                    value={signUpLastName}
+                    onChange={(e) => setSignUpLastName(e.target.value)}
+                    placeholder="e.g. Doe"
+                    className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label
+                  htmlFor="signup-email"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Institutional Email
+                </label>
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
+                    placeholder="e.g. jane.doe@educore.edu"
+                    className="block w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label
+                  htmlFor="signup-password"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Password (min 6 characters)
+                </label>
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <input
+                    id="signup-password"
+                    type={showSignUpPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    minLength={6}
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="block w-full pl-9 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    {showSignUpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label
+                  htmlFor="signup-role"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Institutional Role
+                </label>
+                <div className="relative rounded-lg shadow-xs">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <GraduationCap className="h-4 w-4" />
+                  </div>
+                  <select
+                    id="signup-role"
+                    value={signUpRole}
+                    onChange={(e) => setSignUpRole(e.target.value as UserRole)}
+                    className="block w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all capitalize cursor-pointer"
+                  >
+                    {ROLES.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.title} — {role.desc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Role determines permissions and routing to the authorized dashboard.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-xs text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer mt-3"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Creating account...</span>
+                  </>
+                ) : (
+                  <span>Create Institutional Account</span>
+                )}
+              </button>
+            </form>
+          )}
         </div>
 
-        {/* Footer Note */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Protected by Supabase SSR Auth Cookies & Next.js Edge Middleware RBAC
+        <p className="text-center text-xs text-slate-400 mt-5">
+          EduCore Information Systems • Direct Supabase Auth & PostgreSQL RLS
         </p>
       </div>
     </div>

@@ -1,11 +1,13 @@
 /**
  * Dynamic Role-Based Sidebar Navigation Shell
- * Fetches user profile from Supabase and dynamically renders tailored navigation links.
+ * Clean, modern enterprise SaaS navigation for Next.js App Router.
  */
 
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -20,16 +22,12 @@ import {
   CreditCard,
   History,
   HeartHandshake,
-  FileText,
   BadgePercent,
   Clock,
   LogOut,
-  Shield,
   School,
-  UserCheck,
   ChevronRight,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile, UserRole } from '@/types/database.types';
@@ -44,13 +42,13 @@ export interface NavItem {
 // Role-specific navigation configurations
 export const ROLE_NAVIGATION: Record<UserRole, { label: string; items: NavItem[] }> = {
   admin: {
-    label: 'Administration & Ops',
+    label: 'Administration & Operations',
     items: [
       { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-      { name: 'Users', href: '/admin/users', icon: Users, badge: 'Staff & Students' },
-      { name: 'Classes', href: '/admin/classes', icon: GraduationCap },
-      { name: 'Academic Years', href: '/admin/academic-years', icon: CalendarDays },
-      { name: 'Settings', href: '/admin/settings', icon: Settings },
+      { name: 'User Management', href: '/admin/users', icon: Users, badge: 'Staff & Students' },
+      { name: 'Classes & Sections', href: '/admin/classes', icon: GraduationCap },
+      { name: 'Academic Terms', href: '/admin/academic-years', icon: CalendarDays },
+      { name: 'System Settings', href: '/admin/settings', icon: Settings },
     ],
   },
   teacher: {
@@ -58,109 +56,109 @@ export const ROLE_NAVIGATION: Record<UserRole, { label: string; items: NavItem[]
     items: [
       { name: 'Dashboard', href: '/teacher', icon: LayoutDashboard },
       { name: 'My Classes', href: '/teacher/classes', icon: GraduationCap },
-      { name: 'Attendance', href: '/teacher/attendance', icon: ClipboardCheck },
+      { name: 'Daily Attendance', href: '/teacher/attendance', icon: ClipboardCheck },
       { name: 'Gradebook', href: '/teacher/gradebook', icon: Award },
       { name: 'Assignments', href: '/teacher/assignments', icon: BookOpen, badge: '3 to mark' },
     ],
   },
   accountant: {
-    label: 'Financial Management',
+    label: 'Finance & Bursar',
     items: [
       { name: 'Dashboard', href: '/finance', icon: LayoutDashboard },
       { name: 'Fee Structures', href: '/finance/fee-structures', icon: BadgePercent },
-      { name: 'Invoices', href: '/finance/invoices', icon: Receipt, badge: '12 pending' },
-      { name: 'Payment History', href: '/finance/payments', icon: History },
+      { name: 'Student Invoices', href: '/finance/invoices', icon: Receipt, badge: '12 pending' },
+      { name: 'Payment Ledger', href: '/finance/payments', icon: History },
     ],
   },
   parent: {
-    label: 'Parent Portal',
+    label: 'Parent & Guardian Portal',
     items: [
       { name: 'Dashboard', href: '/parent', icon: LayoutDashboard },
       { name: 'My Children', href: '/parent/children', icon: HeartHandshake },
-      { name: 'Report Cards', href: '/parent/report-cards', icon: FileSpreadsheet },
-      { name: 'Fee Bills', href: '/parent/fees', icon: CreditCard, badge: 'Due' },
+      { name: 'Term Report Cards', href: '/parent/report-cards', icon: FileSpreadsheet },
+      { name: 'Fee Invoices & Bills', href: '/parent/fees', icon: CreditCard, badge: 'Due' },
     ],
   },
   student: {
     label: 'Student Workspace',
     items: [
       { name: 'Dashboard', href: '/student', icon: LayoutDashboard },
-      { name: 'Assignments', href: '/student/assignments', icon: BookOpen, badge: '2 due today' },
-      { name: 'Grades', href: '/student/grades', icon: Award },
-      { name: 'Timetable', href: '/student/timetable', icon: Clock },
+      { name: 'My Assignments', href: '/student/assignments', icon: BookOpen, badge: '2 due today' },
+      { name: 'Term Grades', href: '/student/grades', icon: Award },
+      { name: 'Class Timetable', href: '/student/timetable', icon: Clock },
     ],
   },
 };
 
-// Distinct styling presets for each role
+// Subtle, clean enterprise color themes for role tags
 export const ROLE_THEMES: Record<
   UserRole,
   {
     badgeBg: string;
     badgeText: string;
+    badgeBorder: string;
     activeBg: string;
     activeText: string;
-    iconColor: string;
+    activeIcon: string;
     roleTitle: string;
   }
 > = {
   admin: {
-    badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
-    badgeText: 'text-purple-700',
-    activeBg: 'bg-purple-50 text-purple-700 border-purple-500',
-    activeText: 'text-purple-700',
-    iconColor: 'text-purple-600',
+    badgeBg: 'bg-indigo-50',
+    badgeText: 'text-indigo-700',
+    badgeBorder: 'border-indigo-200',
+    activeBg: 'bg-indigo-50/80',
+    activeText: 'text-indigo-700',
+    activeIcon: 'text-indigo-600',
     roleTitle: 'School Administrator',
   },
   teacher: {
-    badgeBg: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-    badgeText: 'text-indigo-700',
-    activeBg: 'bg-indigo-50 text-indigo-700 border-indigo-500',
-    activeText: 'text-indigo-700',
-    iconColor: 'text-indigo-600',
-    roleTitle: 'Teaching Faculty',
+    badgeBg: 'bg-blue-50',
+    badgeText: 'text-blue-700',
+    badgeBorder: 'border-blue-200',
+    activeBg: 'bg-blue-50/80',
+    activeText: 'text-blue-700',
+    activeIcon: 'text-blue-600',
+    roleTitle: 'Faculty & Teacher',
   },
   accountant: {
-    badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    badgeBg: 'bg-emerald-50',
     badgeText: 'text-emerald-700',
-    activeBg: 'bg-emerald-50 text-emerald-700 border-emerald-500',
+    badgeBorder: 'border-emerald-200',
+    activeBg: 'bg-emerald-50/80',
     activeText: 'text-emerald-700',
-    iconColor: 'text-emerald-600',
-    roleTitle: 'Chief Bursar & Accountant',
+    activeIcon: 'text-emerald-600',
+    roleTitle: 'School Accountant',
   },
   parent: {
-    badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+    badgeBg: 'bg-amber-50',
     badgeText: 'text-amber-700',
-    activeBg: 'bg-amber-50 text-amber-700 border-amber-500',
+    badgeBorder: 'border-amber-200',
+    activeBg: 'bg-amber-50/80',
     activeText: 'text-amber-700',
-    iconColor: 'text-amber-600',
+    activeIcon: 'text-amber-600',
     roleTitle: 'Parent & Guardian',
   },
   student: {
-    badgeBg: 'bg-cyan-100 text-cyan-800 border-cyan-200',
-    badgeText: 'text-cyan-700',
-    activeBg: 'bg-cyan-50 text-cyan-700 border-cyan-500',
-    activeText: 'text-cyan-700',
-    iconColor: 'text-cyan-600',
+    badgeBg: 'bg-teal-50',
+    badgeText: 'text-teal-700',
+    badgeBorder: 'border-teal-200',
+    activeBg: 'bg-teal-50/80',
+    activeText: 'text-teal-700',
+    activeIcon: 'text-teal-600',
     roleTitle: 'Enrolled Student',
   },
 };
 
 interface SidebarProps {
   initialProfile?: Profile | null;
-  currentPath?: string;
-  onNavigate?: (path: string) => void;
-  onSignOut?: () => void;
   className?: string;
 }
 
-export function Sidebar({
-  initialProfile = null,
-  currentPath = '/admin',
-  onNavigate,
-  onSignOut,
-  className = '',
-}: SidebarProps) {
+export function Sidebar({ initialProfile = null, className = '' }: SidebarProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+
   const [profile, setProfile] = useState<Profile | null>(initialProfile);
   const [loading, setLoading] = useState(!initialProfile);
   const [signingOut, setSigningOut] = useState(false);
@@ -173,7 +171,7 @@ export function Sidebar({
     }
   }, [initialProfile]);
 
-  // Client-side profile fetch if not passed by server layout
+  // Client-side profile fetch if initialProfile was not provided
   useEffect(() => {
     if (profile) return;
 
@@ -199,7 +197,6 @@ export function Sidebar({
         if (!error && data && isMounted) {
           setProfile(data as Profile);
         } else if (isMounted) {
-          // Fallback to auth metadata if profile row isn't populated yet
           setProfile({
             id: user.id,
             email: user.email || 'user@school.edu',
@@ -231,13 +228,10 @@ export function Sidebar({
   const handleLogout = async () => {
     setSigningOut(true);
     try {
-      if (onSignOut) {
-        await onSignOut();
-      } else {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        window.location.href = '/login';
-      }
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
     } catch (err) {
       console.error('Sign out error:', err);
     } finally {
@@ -245,114 +239,109 @@ export function Sidebar({
     }
   };
 
-  const handleLinkClick = (e: React.MouseEvent, href: string) => {
-    if (onNavigate) {
-      e.preventDefault();
-      onNavigate(href);
-    }
-  };
-
   return (
     <aside
-      className={`w-64 bg-slate-900 border-r border-slate-800 text-slate-100 flex flex-col h-full shrink-0 select-none ${className}`}
+      className={`w-64 bg-white border-r border-slate-200 text-slate-700 flex flex-col h-full shrink-0 select-none ${className}`}
     >
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-bold">
+      <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-xs text-white">
             <School className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-semibold text-white tracking-tight text-base leading-tight">
+            <h1 className="font-bold text-slate-900 tracking-tight text-sm leading-tight">
               EduCore
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium">School Management</p>
+            <p className="text-[11px] text-slate-500 font-medium">School Management</p>
           </div>
-        </div>
-      </div>
+        </Link>
 
-      {/* Role Indicator Banner */}
-      <div className="px-4 py-3 bg-slate-800/40 border-b border-slate-800/60 flex items-center justify-between">
-        <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400">
-          Role Scope
-        </span>
+        {/* Compact Role Indicator */}
         <span
-          className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border capitalize flex items-center gap-1.5 ${theme.badgeBg}`}
+          className={`text-[11px] px-2 py-0.5 rounded-full font-semibold border capitalize flex items-center gap-1 ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
           {activeRole}
         </span>
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      <div className="flex-1 overflow-y-auto py-5 px-3 space-y-1">
         <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
           {roleConfig.label}
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-sm">
-            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-            <span>Loading menu...</span>
+          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-xs">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+            <span>Loading navigation...</span>
           </div>
         ) : (
           roleConfig.items.map((item) => {
             const Icon = item.icon;
-            const isActive = currentPath === item.href || (item.href !== '/admin' && item.href !== '/teacher' && item.href !== '/finance' && item.href !== '/parent' && item.href !== '/student' && currentPath.startsWith(item.href));
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/admin' &&
+                item.href !== '/teacher' &&
+                item.href !== '/finance' &&
+                item.href !== '/parent' &&
+                item.href !== '/student' &&
+                pathname.startsWith(item.href));
 
             return (
-              <a
+              <Link
                 key={item.name}
                 href={item.href}
-                onClick={(e) => handleLinkClick(e, item.href)}
-                className={`group flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-slate-800 text-white font-semibold shadow-sm shadow-black/20'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                    ? `${theme.activeBg} ${theme.activeText} font-semibold shadow-xs`
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Icon
                     className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? theme.iconColor : 'text-slate-400 group-hover:text-slate-200'
+                      isActive ? theme.activeIcon : 'text-slate-400 group-hover:text-slate-600'
                     }`}
                   />
                   <span className="truncate">{item.name}</span>
                 </div>
                 {item.badge ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
                     {item.badge}
                   </span>
                 ) : isActive ? (
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
                 ) : null}
-              </a>
+              </Link>
             );
           })
         )}
       </div>
 
-      {/* User Profile Summary & Sign Out */}
-      <div className="p-3 border-t border-slate-800 bg-slate-900/90">
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/60 border border-slate-800 mb-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center font-bold text-white text-xs border border-slate-600 shrink-0 overflow-hidden">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.full_name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              (profile?.full_name || 'U').charAt(0).toUpperCase()
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-white truncate">
-              {profile?.full_name || 'School Staff Member'}
-            </p>
-            <p className="text-[11px] text-slate-400 truncate">
-              {profile?.email || 'authenticated@school.edu'}
-            </p>
+      {/* User Profile Footer */}
+      <div className="p-3 border-t border-slate-100 bg-white">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 mb-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.full_name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                (profile?.full_name || 'U').charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-slate-900 truncate">
+                {profile?.full_name || 'School Staff Member'}
+              </p>
+              <p className="text-[11px] text-slate-500 truncate">
+                {profile?.email || 'authenticated@school.edu'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -360,12 +349,12 @@ export function Sidebar({
           type="button"
           onClick={handleLogout}
           disabled={signingOut}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-rose-300 hover:text-white bg-rose-950/30 hover:bg-rose-900/60 border border-rose-900/40 rounded-lg transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors disabled:opacity-60 cursor-pointer"
         >
           {signingOut ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Logging out...</span>
+              <span>Signing out...</span>
             </>
           ) : (
             <>
@@ -378,4 +367,5 @@ export function Sidebar({
     </aside>
   );
 }
+
 export default Sidebar;
